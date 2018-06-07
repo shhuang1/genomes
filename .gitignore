@@ -1,0 +1,6 @@
+/.snakemake
+.Rhistory
+.RData
+core.*
+\#*\#
+*~
