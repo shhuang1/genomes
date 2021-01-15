@@ -317,7 +317,7 @@ rule nuc_chr_faidx:
                   genome_dir=['/GRCh37_sponge/Sequence/WholeGenomeFasta',\
                             '/GRCh38_sponge/Sequence/WholeGenomeFasta',\
                             '/Esa1.0/Sequence/WholeGenomeFasta',\
-             			    '/Illumina_iGenomes/Homo_sapiens/UCSC/hg19/Sequence/WholeGenomeFasta',\
+                            '/Illumina_iGenomes/Homo_sapiens/UCSC/hg19/Sequence/WholeGenomeFasta',\
                             '/Illumina_iGenomes/Homo_sapiens/Ensembl/GRCh37/Sequence/WholeGenomeFasta',\
                             '/Illumina_iGenomes/Homo_sapiens/NCBI/GRCh38/Sequence/WholeGenomeFasta',\
                             '/Illumina_iGenomes/Homo_sapiens/NCBI/GRCh38Decoy/Sequence/WholeGenomeFasta',\
@@ -353,7 +353,7 @@ rule get_chrom_sizes_out:
                   genome_dir=['/GRCh37_sponge/Sequence/WholeGenomeFasta',\
                         '/GRCh38_sponge/Sequence/WholeGenomeFasta',\
                         '/Esa1.0/Sequence/WholeGenomeFasta',\
-             			'/Illumina_iGenomes/Homo_sapiens/UCSC/hg19/Sequence/WholeGenomeFasta',\
+                        '/Illumina_iGenomes/Homo_sapiens/UCSC/hg19/Sequence/WholeGenomeFasta',\
                         '/Illumina_iGenomes/Homo_sapiens/Ensembl/GRCh37/Sequence/WholeGenomeFasta',\
                         '/Illumina_iGenomes/Homo_sapiens/NCBI/GRCh38/Sequence/WholeGenomeFasta',\
                         '/Illumina_iGenomes/Homo_sapiens/NCBI/GRCh38Decoy/Sequence/WholeGenomeFasta',\

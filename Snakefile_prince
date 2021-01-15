@@ -1,0 +1,399 @@
+import csv
+import glob
+import gzip
+import itertools
+import os
+import re
+
+# Define SEPINC as shell environment variable
+SNAKERULES = os.environ.get('SNAKERULES')
+PROJ_NAME = "genomes"
+DEPDIR = "deps"
+include: SNAKERULES + "/Doc.defs.top"
+
+
+rule wg_fasta_chr_Ptv31:
+    input: fa=PRINCE_SCRATCH_LAB+'/genomes/Populus_trichocarpa/Phytozome/Ptrichocarpa_v3.1/Sequence/WholeGenomeFasta/genome.fa'
+    output: fa=PRINCE_SCRATCH_LAB+'/genomes/Populus_trichocarpa/Phytozome/Ptrichocarpa_v3.1/Sequence/WholeGenomeFasta/genome_chr.fa'
+    shell: """
+        sed -e "s/^>/>chr/" {input.fa} > {output.fa}         
+    """
+rule wg_fasta_ZmNam5:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Zea_mays/src/Zm-B73-REFERENCE-NAM-5.0/Zm-B73-REFERENCE-NAM-5.0.fa'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Zea_mays/NAM/Zm-B73-REFERENCE-NAM-5.0/Sequence/WholeGenomeFasta/genome.fa'
+    shell: """
+        ln -r -s {input} {output}
+    """
+rule wg_fasta_chr_VvCabSauv08_v1p1:
+    input: fa=PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/WholeGenomeFasta/VITVvi_vCabSauv08_v1.1.fasta'
+    output: fa=PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/WholeGenomeFasta/VITVvi_vCabSauv08_v1.1_chr.fasta'
+    shell: """
+        sed -e "s/^>/>chr/" {input.fa} > {output.fa}         
+    """
+rule wg_fasta_chr_VvCabSauv08_v1p1_prim:
+    input: fa=PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/WholeGenomeFasta/VITVvi_vCabSauv08_v1.1.primary.fasta'
+    output: fa=PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/WholeGenomeFasta/VITVvi_vCabSauv08_v1.1.primary_chr.fasta'
+    shell: """
+        sed -e "s/^>/>chr/" {input.fa} > {output.fa}         
+    """
+
+rule annot_ZmNam5:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Zea_mays/src/Zm-B73-REFERENCE-NAM-5.0/Zm-B73-REFERENCE-NAM-5.0_Zm00001e.1.gff3'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Zea_mays/NAM/Zm-B73-REFERENCE-NAM-5.0/Annotation/Archives/archive-Zm00001e.1/Zm-B73-REFERENCE-NAM-5.0_Zm00001e.1.gff3'
+    shell: """
+        ln -r -s {input} {output}
+    """
+rule annot_ZmNam5_to_AGPv4:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Zea_mays/src/Ensembl-release-36/fasta/cdna/Zea_mays.AGPv4.cdna.all.fa'
+    params: D=PRINCE_SCRATCH_LAB+'/genomes/Zea_mays/NAM/Zm-B73-REFERENCE-NAM-5.0/Sequence/GMAPIndex',\
+            d='genome',\
+            threads=2,\
+            other_options='-B 4 --nofails'
+    threads: 2
+    log: PRINCE_SCRATCH_LAB+'/genomes/Zea_mays/NAM/Zm-B73-REFERENCE-NAM-5.0/Annotation/Archives/archive-AGPv4.Ensembl36/Zea_mays.AGPv4.cdna.all.GMAPTov5.{format}.gff3.log'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Zea_mays/NAM/Zm-B73-REFERENCE-NAM-5.0/Annotation/Archives/archive-AGPv4.Ensembl36/Zea_mays.AGPv4.cdna.all.GMAPTov5.{format}.gff3'
+    shell: """
+        module load gmap/intel/20190304
+        gmap -D {params.D} -d {params.d} -f {wildcards.format} --nthreads={params.threads} {params.other_options} {input} > {output} 2> {log}
+    """
+rule annot_ZmNam5_to_AGPv4_out:
+    input: expand(PRINCE_SCRATCH_LAB+'/genomes/Zea_mays/NAM/Zm-B73-REFERENCE-NAM-5.0/Annotation/Archives/archive-AGPv4.Ensembl36/Zea_mays.AGPv4.cdna.all.GMAPTov5.{format}.gff3',format=['gff3_gene','gff3_match_cdna','gff3_match_est'])
+
+rule chr_fasta_Ptv31:# one fasta per chromosome
+    input: fa=PRINCE_SCRATCH_LAB+'/genomes/Populus_trichocarpa/Phytozome/Ptrichocarpa_v3.1/Sequence/WholeGenomeFasta/genome.fa'
+    params: D=PRINCE_SCRATCH_LAB+'/genomes/Populus_trichocarpa/Phytozome/Ptrichocarpa_v3.1/Sequence/Chromosomes'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Populus_trichocarpa/Phytozome/Ptrichocarpa_v3.1/Sequence/Chromosomes/Chr01.fa'
+    run:
+        f=open(input.fa,"r");
+        opened = False
+        for line in f :
+            if(line[0] == ">") :
+                if(opened) :
+                    of.close()
+                opened = True
+                contig_name = line[1:].rstrip().split()[0]
+                ofname = "%s/%s.fa" % (params.D,contig_name) 
+                of=open(ofname, "w")
+                print("contig: %s; output file %s"%(contig_name,ofname))
+            of.write(line)
+        of.close()
+rule chr_fasta_VvCabSauv08_v1p1:# one fasta per chromosome
+    input: fa=PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/WholeGenomeFasta/VITVvi_vCabSauv08_v1.1.fasta'
+    params: D=PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/Chromosomes'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/Chromosomes/VITVvi_vCabSauv08_v1.1_Primary000000F.fa'
+    run:
+        f=open(input.fa,"r");
+        opened = False
+        for line in f :
+            if(line[0] == ">") :
+                if(opened) :
+                    of.close()
+                opened = True
+                contig_name = line[1:].rstrip().split()[0]
+                ofname = "%s/%s.fa" % (params.D,contig_name) 
+                of=open(ofname, "w")
+                print("contig: %s; output file %s"%(contig_name,ofname))
+            of.write(line)
+        of.close()
+rule chr_fasta_pn40024_12X2:# one fasta per chromosome
+    input: fa=PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3/Sequence/WholeGenomeFasta/genome.fa'
+    params: D=PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3/Sequence/Chromosomes'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3/Sequence/Chromosomes/chr00.fa'
+    run:
+        f=open(input.fa,"r");
+        opened = False
+        for line in f :
+            if(line[0] == ">") :
+                if(opened) :
+                    of.close()
+                opened = True
+                contig_name = line[1:].rstrip().split()[0]
+                ofname = "%s/%s.fa" % (params.D,contig_name) 
+                of=open(ofname, "w")
+                print("contig: %s; output file %s"%(contig_name,ofname))
+            of.write(line)
+        of.close()
+
+
+rule add_chr_prefix:# one fasta per chromosome, file names start with "chr" to be compatible with GEM requirement
+    input: fa="{seqence_dir}/Chromosomes/{chr_num}.fa"
+    output: fa="{seqence_dir}/Chromosomes_CHR/chr{chr_num}.fa"
+    shell: """
+       ln -rs {input.fa} {output.fa}
+    """
+
+rule add_chr_prefix_Ptv31:
+   input: f.replace('/Chromosomes/','/Chromosomes_CHR/chr') for f in glob.glob(PRINCE_SCRATCH_LAB+'/genomes/Populus_trichocarpa/Phytozome/Ptrichocarpa_v3.1/Sequence/Chromosomes/*.fa')
+
+rule add_chr_prefix_VvCabSauv08_v1p1:
+   input: f.replace('/Chromosomes/','/Chromosomes_CHR/chr') for f in glob.glob(PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/Chromosomes/*.fa')
+
+##########
+## VG
+##########
+
+VG_EXEC = 'singularity exec /beegfs/work/public/singularity/vg-1.20.0.sif vg'
+
+rule wg_vg_construct:
+    input: '{results_dir}/Sequence/WholeGenomeFasta/genome.fa'
+    output: '{results_dir}/Sequence/VGIndex/genome.vg'
+    shell: """
+        {VG_EXEC} construct -r {input} > {output}
+    """
+
+rule wg_vg_construct_out:
+    input: expand('{results_dir}/Sequence/VGIndex/genome.vg',\
+                  results_dir=[PRINCE_SCRATCH_LAB+'/Illumina_iGenomes/Arabidopsis_thaliana/Ensembl/TAIR10'])
+
+rule wg_vg_index:
+    input: vg='{results_dir}/Sequence/VGIndex/genome.vg'
+    params: threads=4
+    output: xg='{results_dir}/Sequence/VGIndex/genome_{k}.xg',\
+            gcsa='{results_dir}/Sequence/VGIndex/genome_{k}.gcsa'
+    shell: """
+        {VG_EXEC} index -t {params.threads} -k {wildcards.k} -x {output.xg} {input.vg}
+        {VG_EXEC} index -t {params.threads} -k {wildcards.k} -g {output.gcsa} {input.vg}
+    """
+rule wg_vg_index_out:
+    input: expand('{results_dir}/Sequence/VGIndex/genome_{k}.xg',\
+                  results_dir=[PRINCE_SCRATCH_LAB+'/Illumina_iGenomes/Arabidopsis_thaliana/Ensembl/TAIR10'],\
+                  k=['16'])
+    
+    
+VG_EXEC2 = 'singularity exec /beegfs/work/public/singularity/vg-1.14.0.simg vg'
+
+rule wg_vg_construct2:
+    input: '{results_dir}/Sequence/WholeGenomeFasta/genome.fa'
+    params: threads=8
+    output: '{results_dir}/Sequence/VGIndex-1.14.0/genome.vg'
+    shell: """
+        {VG_EXEC2} construct -t {params.threads} -r {input} > {output}
+    """
+
+rule wg_vg_construct2_out:
+    input: expand('{results_dir}/Sequence/VGIndex-1.14.0/genome.vg',\
+                  results_dir=[PRINCE_SCRATCH_LAB+'/Illumina_iGenomes/Arabidopsis_thaliana/Ensembl/TAIR10'])
+
+rule wg_vg_index2:
+    input: vg='{results_dir}/Sequence/VGIndex-1.14.0/genome.vg'
+    params: threads=8
+    output: xg='{results_dir}/Sequence/VGIndex-1.14.0/genome_{k}.xg',\
+            gcsa='{results_dir}/Sequence/VGIndex-1.14.0/genome_{k}.gcsa'
+    shell: """
+        {VG_EXEC2} index -t {params.threads} -k {wildcards.k} -x {output.xg} {input.vg}
+        {VG_EXEC2} index -t {params.threads} -k {wildcards.k} -g {output.gcsa} {input.vg}
+    """
+rule wg_vg_index2_out:
+    input: expand('{results_dir}/Sequence/VGIndex-1.14.0/genome_{k}.xg',\
+                  results_dir=[PRINCE_SCRATCH_LAB+'/Illumina_iGenomes/Arabidopsis_thaliana/Ensembl/TAIR10'],\
+                  k=['16'])
+                            
+rule bowtie2_index_fa:
+    input: genome='{results_dir}/Sequence/WholeGenomeFasta/{bt2_base}.fa'
+    params: threads=8,\
+            D='{results_dir}/Sequence/Bowtie2Index',\
+            bt2_base='genome'
+    threads: 8
+    log: '{results_dir}/Sequence/Bowtie2Index/genome_bowtie2_build.log'
+    output: '{results_dir}/Sequence/Bowtie2Index/{bt2_base}.1.bt2'
+    shell: """
+        module load bowtie2/intel/2.3.2 
+        cd {params.D}; bowtie2-build --threads {threads} {input.genome} {wildcards.bt2_base}
+    """
+rule bowtie2_index_out:
+    input: expand('{results_dir}/Sequence/Bowtie2Index/genome.1.bt2',\
+                  results_dir=[PRINCE_SCRATCH_LAB+'/Illumina_iGenomes/Arabidopsis_thaliana/Ensembl/TAIR10',\
+                               PRINCE_SCRATCH_LAB+'/genomes/Populus_trichocarpa/Phytozome/Ptrichocarpa_v3.1',\
+                               PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3'])
+
+rule bowtie2_index_VvCabSauv08_v1:
+    input: prim=PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Sequence/WholeGenomeFasta/VvCabSauv08_v1.primary.fasta',\
+           hap=PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Sequence/WholeGenomeFasta/VvCabSauv08_v1.haplotigs.fasta'
+    params: threads=8,\
+            D=PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Sequence/Bowtie2Index',\
+            bt2_base='VvCabSauv08_v1'
+    threads: 8
+    log: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Sequence/Bowtie2Index/VvCabSauv08_v1.log'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Sequence/Bowtie2Index/VvCabSauv08_v1.1.bt2'
+    shell: """
+        module load bowtie2/intel/2.3.2 
+        cd {params.D}; bowtie2-build --threads {threads} {input.prim},{input.hap} {params.bt2_base}
+    """
+rule bowtie2_index_VvCabSauv08_v1_prim:
+    input: prim=PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Sequence/WholeGenomeFasta/VvCabSauv08_v1.primary.fasta'
+    params: threads=8,\
+            D=PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Sequence/Bowtie2Index',\
+            bt2_base='VvCabSauv08_v1.primary'
+    threads: 8
+    log: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Sequence/Bowtie2Index/VvCabSauv08_v1.primary.log'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Sequence/Bowtie2Index/VvCabSauv08_v1.primary.1.bt2'
+    shell: """
+        module load bowtie2/intel/2.3.2 
+        cd {params.D}; bowtie2-build --threads {threads} {input.prim} {params.bt2_base}
+    """
+
+rule wg_fasta_VvCabSauv08_v1p1:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/src/VITVvi_vCabSauv08_v1.1.fasta.gz'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/WholeGenomeFasta/VITVvi_vCabSauv08_v1.1.fasta'
+    shell: """
+        module load emboss/intel/6.6.0
+        zcat {input} | sizeseq -sequences stdin -descending Y -outseq {output}
+    """
+rule wg_fasta_VvCabSauv08_v1p1_prim:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/src/VITVvi_vCabSauv08_v1.1.primary.fasta.gz'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/WholeGenomeFasta/VITVvi_vCabSauv08_v1.1.primary.fasta'
+    shell: """
+        module load emboss/intel/6.6.0
+        zcat {input} | sizeseq -sequences stdin -descending Y -outseq {output}
+    """
+rule bowtie2_index_VvCabSauv08_v1p1:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/WholeGenomeFasta/VITVvi_vCabSauv08_v1.1.fasta'
+    params: threads=8,\
+            D=PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/Bowtie2Index',\
+            bt2_base='VITVvi_vCabSauv08_v1.1'
+    threads: 8
+    log: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/Bowtie2Index/VITVvi_vCabSauv08_v1.1.log'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/Bowtie2Index/VITVvi_vCabSauv08_v1.1.1.bt2'
+    shell: """
+        module load bowtie2/intel/2.3.2 
+        cd {params.D}; bowtie2-build --threads {threads} {input} {params.bt2_base}
+    """
+
+rule wg_fasta_PN40024_12X2:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3/src/all_chr_111113_V2.fasta'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3/Sequence/WholeGenomeFasta/genome.fa'
+    shell: """
+        ln -rs {input} {output}
+    """
+
+rule gmap_index:
+    input: genome='{results_dir}/Sequence/WholeGenomeFasta/genome.fa'
+    params: D='{results_dir}/Sequence/GMAPIndex',\
+            d='genome'
+    log: '{results_dir}/Sequence/GMAPIndex/genome_gmap_build.log'
+    output: '{results_dir}/Sequence/GMAPIndex/genome/genome.chromosome'
+    shell: """
+        module load gmap/intel/20190304
+        gmap_build -D {params.D} -d {params.d} {input.genome}
+    """
+rule gmap_index_out:
+    input: expand('{results_dir}/Sequence/GMAPIndex/genome/genome.chromosome',\
+                  results_dir=[PRINCE_SCRATCH_LAB+'/genomes/Zea_mays/NAM/Zm-B73-REFERENCE-NAM-5.0'])
+
+
+rule samtools_faidx:
+    input: "{genome}.fa"
+    output: "{genome}.fa.fai"
+    shell: """
+        module load samtools/intel/1.6
+        samtools faidx {input}
+    """
+rule samtools_fastaidx:
+    input: "{genome}.fasta"
+    output: "{genome}.fasta.fai"
+    shell: """
+        module load samtools/intel/1.6
+        samtools faidx {input}
+    """
+rule samtools_nuc_chr:
+    input: fa="{sequence_dir}/WholeGenomeFasta/genome.fa",nuc_chr="{sequence_dir}/SeqInfo/nuclear_chromosomes.txt"
+    output: nuc_fa="{sequence_dir}/WholeGenomeFasta/nuclear_chromosomes.fa"
+    shell: """
+        module load samtools/intel/1.6
+        samtools faidx {input.fa} `cat {input.nuc_chr}` > {output.nuc_fa}
+    """
+rule nuc_chr_faidx:
+    input: expand(PRINCE_SCRATCH_LAB+"/{genome_dir}/nuclear_chromosomes.fa.fai",\
+                  genome_dir=['genomes/Populus_trichocarpa/Phytozome/Ptrichocarpa_v3.1/Sequence/WholeGenomeFasta']) +
+           expand(PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/WholeGenomeFasta/{genome}.fasta.fai',
+                  genome=['VITVvi_vCabSauv08_v1.1','VITVvi_vCabSauv08_v1.1.primary'])
+
+rule get_chrom_sizes:
+	input: "{genome}.fa.fai"
+	output: "{genome}.chrom.sizes"
+	shell:"""
+        cut -f1,2 {input} > {output}
+        """
+rule get_chrom_sizes2:
+	input: "{genome}.fasta.fai"
+	output: "{genome}.chrom.sizes"
+	shell:"""
+        cut -f1,2 {input} > {output}
+        """
+rule get_chrom_sizes_out:
+    input: expand(PRINCE_SCRATCH_LAB+"/{genome_dir}/{g}.chrom.sizes",\
+                  g=['genome','nuclear_chromosomes'],\
+                  genome_dir=['genomes/Populus_trichocarpa/Phytozome/Ptrichocarpa_v3.1/Sequence/WholeGenomeFasta']) + \
+        expand(PRINCE_SCRATCH_LAB+"/{genome_dir}/{g}.chrom.sizes",\
+               g=['genome'],\
+               genome_dir=['genomes/Zea_mays/NAM/Zm-B73-REFERENCE-NAM-5.0/Sequence/WholeGenomeFasta',\
+                           'genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3/Sequence/WholeGenomeFasta']) + \
+        expand(PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/WholeGenomeFasta/{g}.chrom.sizes',\
+               g=['VITVvi_vCabSauv08_v1.1','VITVvi_vCabSauv08_v1.1.primary'])
+
+
+rule VvCabSauv08_v1_repeats_bed:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Annotation/Archives/archive-2019-06-20/Repeats/VvCabSauv08_v1.repeats.primary_and_haplotigs.renamed_haplotigs.gff'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Annotation/Archives/archive-2019-06-20/Repeats/VvCabSauv08_v1.repeats.primary_and_haplotigs.renamed_haplotigs.bed'
+    shell: """
+        module load bedops/intel/2.4.26
+        gff2bed < {input} > {output}
+    """
+rule VvCabSauv08_v1_repeats_gff_chr:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Annotation/Archives/archive-2019-06-20/Repeats/VvCabSauv08_v1.repeats.primary_and_haplotigs.renamed_haplotigs.gff'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Annotation/Archives/archive-2019-06-20/Repeats/VvCabSauv08_v1.repeats.primary_and_haplotigs.renamed_haplotigs_chr.gff'
+    shell: """
+        awk -v FS='\\t' -v OFS='\\t' '{{ $1="chr" $1; print }}' {input} > {output}
+    """
+rule VvCabSauv08_v1_repeats_txt_for_gem33:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Annotation/Archives/archive-2019-06-20/Repeats/VvCabSauv08_v1.repeats.primary_and_haplotigs.renamed_haplotigs.bed'
+    output: PRINCE_HOME+'/dir_by_type/data/application_files/gem-3.3/VvCabSauv08_v1.repeats.primary_and_haplotigs.renamed_haplotigs.txt'
+    shell: """
+        awk -v FS='\\t' -v OFS='\\t' '{{ print $1 ":" $2"-"$3 }}' {input} | sort > {output}
+    """
+rule VvCabSauv08_v1p1_repeats_gff_chr:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Annotation/Archives/archive-2020-03-20/Repeats/VITVvi_vCabSauv08_v1.1.repeats.gff3'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Annotation/Archives/archive-2020-03-20/Repeats/VITVvi_vCabSauv08_v1.1.repeats_chr.gff3'
+    shell: """
+        awk -v FS='\\t' -v OFS='\\t' '{{ if ($1!~/#/) {{ $1="chr" $1; }} print }}' {input} > {output}
+    """
+
+rule VvPN40024_VCost_v3_20_genbank:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3/src/Vitis_vinifera_VCost.v3_20_with_header.genbank'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3/Annotation/Archives/archive-VCost-v3/Genes/Vitis_vinifera_VCost.v3_20_with_header.genbank'
+    shell: """
+        ln -rs {input} {output}
+    """
+rule VvPN40024_VCost_v3_20_bed:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3/Annotation/Archives/archive-VCost-v3/Genes/Vitis_vinifera_gene_annotation_on_V2_20.gff3'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3/Annotation/Archives/archive-VCost-v3/Genes/Vitis_vinifera_gene_annotation_on_V2_20.bed'
+    shell: """
+        module load bedops/intel/2.4.26
+        gff2bed < {input} > {output}
+    """
+rule VvPN40024_curated_TE_gff3:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3/src/curated_allChr_PAST12Xv2Man2_2.gff3'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3/Annotation/Archives/archive-VCost-v3/Repeats/curated_allChr_PAST12Xv2Man2_2.gff3'
+    shell: """
+        ln -rs {input} {output}
+    """
+
+rule Araport11_genes_transposons_gff:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Arabidopsis_thaliana/src/Araport11_genome_release/Araport11_GFF3_genes_transposons.201606.gff'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Arabidopsis_thaliana/TAIR/Araport11/Annotation/Archives/archive-2016-06/Genes/Araport11_GFF3_genes_transposons.201606.gff'
+    shell: """
+        ln -rs {input} {output}
+    """
+rule Araport11_genes_transposons_gtf:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Arabidopsis_thaliana/src/Araport11_genome_release/Araport11_GFF3_genes_transposons.201606.gtf'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Arabidopsis_thaliana/TAIR/Araport11/Annotation/Archives/archive-2016-06/Genes/Araport11_GFF3_genes_transposons.201606.gtf'
+    shell: """
+        ln -rs {input} {output}
+    """
+
+rule Ath_Ens49_gff3:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Arabidopsis_thaliana/src/Ensembl-release-49/gff3/Arabidopsis_thaliana.TAIR10.49.gff3'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Arabidopsis_thaliana/Ensembl/TAIR10/Annotation/Archives/archive-2020-09-06-11-02/Genes/Arabidopsis_thaliana.TAIR10.49.gff3'
+    shell: """
+        ln -rs {input} {output}
+    """

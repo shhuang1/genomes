@@ -1,0 +1,160 @@
+
+```{r load_libs}                                        # create Araport11 gene annotation files
+library(biomaRt)
+library(data.table)
+library(GenomicFeatures)
+library(systemPipeR)
+```
+
+```{r set_file_paths}
+ARAPORT11_GENES_DIR = "/scratch/cgsb/huang/genomes/Arabidopsis_thaliana/TAIR/Araport11/Annotation/Archives/archive-2016-06/Genes"
+ENS49_GENES_DIR = '/scratch/cgsb/huang/genomes/Arabidopsis_thaliana/Ensembl/TAIR10/Annotation/Archives/archive-2020-09-06-11-02/Genes'
+```
+
+## Make annotation files from Araport GFF
+```{r load_gff}
+#txdb2 = makeTxDbFromGFF(file='/scratch/cgsb/huang/genomes/Arabidopsis_thaliana/src/TAIR10_genome_release/TAIR10_GFF3_genes_transposons.gff',
+#                        format='gff3',organism='Arabidopsis')
+#tx2 = transcripts(txdb2, columns=c("tx_name", "gene_id", "tx_type"))
+
+txdb = makeTxDbFromGFF(file=file.path(ARAPORT11_GENES_DIR,"Araport11_GFF3_genes_transposons.201606.gff"),
+                       format="gff3", organism="Arabidopsis")
+
+seqlevels(txdb)
+# THIS DOES NOT WORK (txdb records are not updated with new chrom names)
+#seqlevels(txdb) = sub("Chr", "", seqlevels(txdb))
+#seqlevels(txdb)[seqlevels(txdb) == "C"] <- "Pt"
+#seqlevels(txdb)[seqlevels(txdb) == "M"] <- "Mt"
+                                        #seqlevels(txdb)
+seqlevelsStyle(txdb) = 'Ensembl'
+seqlevels(txdb)
+
+tx = transcripts(txdb, columns=c("tx_name", "gene_id", "tx_type"))
+print(table(mcols(tx)$tx_type))
+
+saveDb(txdb,file.path(ARAPORT11_GENES_DIR,paste0('TxDb.Athaliana.TAIR.Araport11')))
+
+```
+
+```{r txdb_by_type}
+gene_type_file = file.path(ARAPORT11_GENES_DIR,'Araport11_gene_type')
+gene_type_dt = fread(cmd=paste('grep -v ^!',gene_type_file))
+
+gene_type_count = gene_type_dt[,.N,by="gene_model_type"]
+
+txdb_dump = as.list(txdb)
+for (gene_type in gene_type_count[,gene_model_type]) {
+    print(gene_type)
+    # only keep the genes that have this type
+    txdb_ge = subset(txdb_dump[['genes']],gene_id %in% gene_type_dt[gene_model_type==gene_type,name])
+    txdb_tx = subset(txdb_dump[['transcripts']],tx_id %in% txdb_ge[,'tx_id'])
+    txdb_sp = subset(txdb_dump[['splicings']],tx_id %in% txdb_ge[,'tx_id'])
+    txdb_chrom = txdb_dump[['chrominfo']]
+    txdb_type = makeTxDb(transcripts=txdb_tx,splicings=txdb_sp,genes=txdb_ge,chrominfo=txdb_chrom)
+    tx_type = transcripts(txdb_type,columns=c('tx_name','gene_id','tx_type'))
+    print(table(mcols(tx_type)$tx_type))
+    
+    saveDb(txdb_type,file.path(ARAPORT11_GENES_DIR,paste0('TxDb.Athaliana.TAIR.Araport11_',gene_type)))
+}
+
+```
+
+Generate genic feature BED files. NOT RUN.
+```{r gen_features,eval=FALSE}
+feat_list = genFeatures(txdb_clean, featuretype="all", reduce_ranges=TRUE,
+                   upstream=1000, downstream=0,
+                   verbose=TRUE)
+
+names(feat_list)[names(feat_list)=='promoter_red'] = 'tss_u1000d0_red'
+
+for (feat_name in names(feat_list)) {
+    print(feat_name)
+    feat_gr = feat_list[[feat_name]]
+    
+    export.bed(feat_gr,file.path(GENES_DIR,paste0('all.',feat_name,'.bed')))
+
+    for (gene_type in gene_type_count[,gene_model_type]) {
+        print(gene_type)
+
+        feat_gr_sub = feat_gr[mcols(feat_gr)$feature_by %in% gene_type_dt[gene_model_type==gene_type,name]]
+        if (length(feat_gr_sub)>0) {
+            export.bed(feat_gr_sub, file.path(GENES_DIR,paste0(gene_type,'.',feat_name,'.bed')))
+        }
+    }
+}
+```
+
+## Make annotation file based on BioMart
+
+```{r get_bm_info}
+listMarts(host='plants.ensembl.org')
+mart = useMart(biomart="plants_mart",host="plants.ensembl.org")
+listDatasets(mart)
+```
+
+```{r load_bm}
+mart = useMart(biomart="plants_mart",
+               dataset="athaliana_eg_gene",
+               host="plants.ensembl.org")
+
+bm_transcripts = getBM(attributes=c("ensembl_gene_id", "ensembl_transcript_id","gene_biotype","transcript_biotype"),
+                       mart=mart)
+table(bm_transcripts[,c('gene_biotype','transcript_biotype')])
+
+txdb_bm = makeTxDbFromBiomart(biomart="plants_mart",
+                              dataset="athaliana_eg_gene",
+                              circ_seqs=c("Mt","Pt"),
+                              host="plants.ensembl.org")
+                              
+tx_bm = transcripts(txdb_bm, columns=c("tx_name", "gene_id", "tx_type"))
+print(table(mcols(tx_bm)$tx_type))
+
+saveDb(txdb_bm,file.path(ENS49_GENES_DIR,'TxDb.Athaliana.BioMart.plantsmart49'))
+
+txdb_ensgff = makeTxDbFromGFF(file=file.path(ENS49_GENES_DIR,'/Arabidopsis_thaliana.TAIR10.49.gff3'),
+                        format='gff3',organism='Arabidopsis')
+
+tx_ensgff = transcripts(txdb_ensgff,columns=c('tx_name','gene_id','tx_type'))
+
+print(table(mcols(tx_ensgff)$tx_type))
+
+tx_biotype_use = c('protein_coding','lncRNA')
+
+for (bt in tx_biotype_use) {
+     
+    txdb_biotype = makeTxDbFromBiomart(biomart="plants_mart",
+                                       dataset="athaliana_eg_gene",
+                                       circ_seqs=c("Mt","Pt"),
+                                       filter=list(transcript_biotype=bt),
+                                       host="plants.ensembl.org")
+    tx_biotype = transcripts(txdb_biotype, columns=c("tx_name", "gene_id", "tx_type"))
+    print(table(mcols(tx_biotype)$tx_type))
+
+    saveDb(txdb_biotype,file.path(ENS49_GENES_DIR,paste0('TxDb.Athaliana.BioMart.plantsmart49_',bt)))
+}
+```
+
+## Compare TxDb made from GFF and from Ensembl
+
+```{r compare_txdb}
+a11db=loadDb(file.path(ARAPORT11_GENES_DIR,'TxDb.Athaliana.TAIR.Araport11_protein_coding'))
+ens49db=loadDb(file.path(ENS49_GENES_DIR,'TxDb.Athaliana.BioMart.plantsmart49_protein_coding'))
+
+a11tx=transcripts(a11db,columns=c('tx_name','gene_id','tx_type'))
+length(a11tx)
+ens49tx=transcripts(ens49db,columns=c('tx_name','gene_id','tx_type'))
+length(ens49tx)
+```
+
+These are nontranslating_CDS transcripts
+```{r nontranslating_CDS}
+setdiff(mcols(a11tx)$tx_name,mcols(ens49tx)$tx_name)
+```
+AT3G12915.1 - Ensembl annotates as nontranslating; Araport11 has protein line
+AT3G12915.2 - Ensembl annotates protein_coding; Araport11 has protein line
+AT1G64460.1 - Ensembl annotates as nontranslating; Araport11 has protein
+
+These two are pseudogenes
+```{r pseudogene}
+setdiff(mcols(ens49tx)$tx_name,mcols(a11tx)$tx_name)
+```

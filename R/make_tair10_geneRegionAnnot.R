@@ -90,4 +90,4 @@ write_feature_bed_all<-function(Gtf_dir) {
 
 write_feature_bed_all(Gtf_dir=file.path(PROJ_DATA_PATH,'Illumina_iGenomes/Arabidopsis_thaliana/Ensembl/TAIR10/Annotation/Archives/archive-2015-07-17-14-28-46/Genes'))
 
-write_feature_bed_all(Gtf_dir=file.path(PROJ_DATA_PATH,'Illumina_iGenomesHomo_sapiens/Ensembl/GRCh37/Annotation/Archives/archive-2015-07-17-14-31-42/Genes/'))
+write_feature_bed_all(Gtf_dir=file.path(PROJ_DATA_PATH,'Illumina_iGenomes/Homo_sapiens/Ensembl/GRCh37/Annotation/Archives/archive-2015-07-17-14-31-42/Genes/'))
