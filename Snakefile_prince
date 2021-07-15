@@ -194,7 +194,7 @@ rule bowtie2_index_fa:
             D='{results_dir}/Sequence/Bowtie2Index',\
             bt2_base='genome'
     threads: 8
-    log: '{results_dir}/Sequence/Bowtie2Index/genome_bowtie2_build.log'
+    log: '{results_dir}/Sequence/Bowtie2Index/{bt2_base}_bowtie2_build.log'
     output: '{results_dir}/Sequence/Bowtie2Index/{bt2_base}.1.bt2'
     shell: """
         module load bowtie2/intel/2.3.2 
@@ -204,7 +204,8 @@ rule bowtie2_index_out:
     input: expand('{results_dir}/Sequence/Bowtie2Index/genome.1.bt2',\
                   results_dir=[PRINCE_SCRATCH_LAB+'/Illumina_iGenomes/Arabidopsis_thaliana/Ensembl/TAIR10',\
                                PRINCE_SCRATCH_LAB+'/genomes/Populus_trichocarpa/Phytozome/Ptrichocarpa_v3.1',\
-                               PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3'])
+                               PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3',\
+                               PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_40X'])
 
 rule bowtie2_index_VvCabSauv08_v1:
     input: prim=PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Sequence/WholeGenomeFasta/VvCabSauv08_v1.primary.fasta',\
@@ -232,6 +233,21 @@ rule bowtie2_index_VvCabSauv08_v1_prim:
         cd {params.D}; bowtie2-build --threads {threads} {input.prim} {params.bt2_base}
     """
 
+rule kallisto_index_cdna:
+    input: fa='{results_dir}/Sequence/cDNAFasta/cdna_all.fa'
+    params: threads=1
+    threads: 1
+    log: '{results_dir}/Sequence/KallistoIndex/cdna_all.idx.log'
+    output:'{results_dir}/Sequence/KallistoIndex/cdna_all.idx'
+    shell: """
+        module load kallisto/0.46.1
+        kallisto index -i {output} {input.fa} > {log} 2>&1
+    """
+rule kallisto_index_out: 
+    input: expand('{results_dir}/Sequence/KallistoIndex/cdna_all.idx',\
+                  results_dir=[PRINCE_SCRATCH_LAB+'/genomes/Arabidopsis_thaliana/Ensembl/TAIR10']\
+                  )
+    
 rule wg_fasta_VvCabSauv08_v1p1:
     input: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/src/VITVvi_vCabSauv08_v1.1.fasta.gz'
     output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/WholeGenomeFasta/VITVvi_vCabSauv08_v1.1.fasta'
@@ -266,6 +282,14 @@ rule wg_fasta_PN40024_12X2:
         ln -rs {input} {output}
     """
 
+rule wg_fasta_PN40024_40X:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_40X/src/PN40024_40X_REF.fasta'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_40X/Sequence/WholeGenomeFasta/genome.fa'
+    shell: """
+        ln -rs {input} {output}
+    """
+
+    
 rule gmap_index:
     input: genome='{results_dir}/Sequence/WholeGenomeFasta/genome.fa'
     params: D='{results_dir}/Sequence/GMAPIndex',\
@@ -329,8 +353,11 @@ rule get_chrom_sizes_out:
                genome_dir=['genomes/Zea_mays/NAM/Zm-B73-REFERENCE-NAM-5.0/Sequence/WholeGenomeFasta',\
                            'genomes/Vitis_vinifera/URGI/PN40024_12X.2_VCost.v3/Sequence/WholeGenomeFasta']) + \
         expand(PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/WholeGenomeFasta/{g}.chrom.sizes',\
-               g=['VITVvi_vCabSauv08_v1.1','VITVvi_vCabSauv08_v1.1.primary'])
-
+               g=['VITVvi_vCabSauv08_v1.1','VITVvi_vCabSauv08_v1.1.primary']) +\
+        expand(PRINCE_SCRATCH_LAB+"{genome_dir}/{g}.chrom.sizes",\
+                  g=['genome_chr'],\
+                  genome_dir=['/Illumina_iGenomes/Arabidopsis_thaliana/Ensembl/TAIR10/Sequence/WholeGenomeFasta',\
+                      ])
 
 rule VvCabSauv08_v1_repeats_bed:
     input: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1/Annotation/Archives/archive-2019-06-20/Repeats/VvCabSauv08_v1.repeats.primary_and_haplotigs.renamed_haplotigs.gff'

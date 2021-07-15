@@ -1,10 +1,15 @@
 # create TAIR10 gene annotation files for TAIR10
 library(biomaRt)
+library(data.table)
 library(doMC)
 library(GenomicFeatures)
 library(plyr)
 library(rtracklayer)
 
+
+##############################
+# For Illumnina iGenome files
+##############################
 chr_alias = list('1'='chr1','2'='chr2','3'='chr3','4'='chr4','5'='chr5',
     'Mt'='chrM','Pt'='chrC')
 
@@ -91,3 +96,48 @@ write_feature_bed_all<-function(Gtf_dir) {
 write_feature_bed_all(Gtf_dir=file.path(PROJ_DATA_PATH,'Illumina_iGenomes/Arabidopsis_thaliana/Ensembl/TAIR10/Annotation/Archives/archive-2015-07-17-14-28-46/Genes'))
 
 write_feature_bed_all(Gtf_dir=file.path(PROJ_DATA_PATH,'Illumina_iGenomes/Homo_sapiens/Ensembl/GRCh37/Annotation/Archives/archive-2015-07-17-14-31-42/Genes/'))
+
+
+## Make annotation files from TAIR GFF
+TAIR10_GENES_DIR = "/scratch/cgsb/huang/genomes/Arabidopsis_thaliana/TAIR/TAIR10/Annotation/Archives/archive-2019-07-11/Genes"
+ENS28_GENES_DIR = '/scratch/cgsb/huang/genomes/Arabidopsis_thaliana/Ensembl/TAIR10/Annotation/Archives/archive-2015-07-31-10-12/Genes'
+txdb = TxDb.Athaliana.BioMart.plantsmart28 # confirmed that it used TAIR10
+
+seqlevels(txdb)
+# THIS DOES NOT WORK (txdb records are not updated with new chrom names)
+#seqlevels(txdb) = sub("Chr", "", seqlevels(txdb))
+#seqlevels(txdb)[seqlevels(txdb) == "C"] <- "Pt"
+#seqlevels(txdb)[seqlevels(txdb) == "M"] <- "Mt"
+                                        #seqlevels(txdb)
+seqlevelsStyle(txdb)
+
+tx = transcripts(txdb, columns=c("tx_name", "gene_id", "tx_type"))
+print(table(mcols(tx)$tx_type))
+
+gene_type_file = file.path(TAIR10_GENES_DIR,'TAIR10_gene_type')
+gene_type_dt = fread(gene_type_file,col.names=c("name","gene_model_type"))
+
+gene_type_count = gene_type_dt[,.N,by="gene_model_type"]
+
+txdb_dump = as.list(txdb)
+
+for (gene_type in gene_type_count[,gene_model_type]) {
+    print(gene_type)
+    # only keep the genes that have this type
+    txdb_ge = subset(txdb_dump[['genes']],gene_id %in% gene_type_dt[gene_model_type==gene_type,name])
+    txdb_tx = subset(txdb_dump[['transcripts']],tx_id %in% txdb_ge[,'tx_id'])
+    txdb_sp = subset(txdb_dump[['splicings']],tx_id %in% txdb_ge[,'tx_id'])
+    txdb_chrom = txdb_dump[['chrominfo']]
+    txdb_type = makeTxDb(transcripts=txdb_tx,splicings=txdb_sp,genes=txdb_ge,chrominfo=txdb_chrom)
+    tx_type = transcripts(txdb_type,columns=c('tx_name','gene_id','tx_type'))
+    print(table(mcols(tx_type)$tx_type))
+    
+    if ("save_txdb_ens28" %in% step_list) {
+    
+        saveDb(txdb_type,file.path(ENS28_GENES_DIR,paste0('TxDb.Athaliana.BioMart.plantsmart28_',gene_type)))
+    }
+}
+
+
+
+

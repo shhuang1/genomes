@@ -1,0 +1,79 @@
+import csv
+import glob
+import gzip
+import itertools
+import os
+import re
+
+# Define SEPINC as shell environment variable
+SNAKERULES = os.environ.get('SNAKERULES')
+PROJ_NAME = "genomes"
+DEPDIR = "deps"
+include: SNAKERULES + "/Doc.defs.top"
+
+rule bowtie2_index_fa:
+    input: genome='{results_dir}/Sequence/WholeGenomeFasta/{bt2_base}.fa'
+    params: threads=8,\
+            D='{results_dir}/Sequence/Bowtie2Index',\
+            bt2_base='genome'
+    threads: 8
+    log: '{results_dir}/Sequence/Bowtie2Index/{bt2_base}_bowtie2_build.log'
+    output: '{results_dir}/Sequence/Bowtie2Index/{bt2_base}.1.bt2'
+    shell: """
+        module load bowtie2/2.4.2
+        cd {params.D}; bowtie2-build --threads {threads} {input.genome} {wildcards.bt2_base}
+    """
+rule bowtie2_index_out:
+    input: expand('{results_dir}/Sequence/Bowtie2Index/genome.1.bt2',\
+                  results_dir=[PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_40X'])
+
+rule wg_fasta_PN40024_40X:
+    input: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_40X/src/PN40024_40X_REF.fasta'
+    output: PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/URGI/PN40024_40X/Sequence/WholeGenomeFasta/genome.fa'
+    shell: """
+        ln -rs {input} {output}
+    """
+
+rule samtools_faidx:
+    input: "{genome}.fa"
+    output: "{genome}.fa.fai"
+    shell: """
+        module load samtools/intel/1.11
+        samtools faidx {input}
+    """
+rule samtools_fastaidx:
+    input: "{genome}.fasta"
+    output: "{genome}.fasta.fai"
+    shell: """
+        module load samtools/intel/1.11
+        samtools faidx {input}
+    """
+rule samtools_nuc_chr:
+    input: fa="{sequence_dir}/WholeGenomeFasta/genome.fa",nuc_chr="{sequence_dir}/SeqInfo/nuclear_chromosomes.txt"
+    output: nuc_fa="{sequence_dir}/WholeGenomeFasta/nuclear_chromosomes.fa"
+    shell: """
+        module load samtools/intel/1.6
+        samtools faidx {input.fa} `cat {input.nuc_chr}` > {output.nuc_fa}
+    """
+rule nuc_chr_faidx:
+    input: expand(PRINCE_SCRATCH_LAB+"/{genome_dir}/nuclear_chromosomes.fa.fai",\
+                  genome_dir=['genomes/Populus_trichocarpa/Phytozome/Ptrichocarpa_v3.1/Sequence/WholeGenomeFasta']) +
+           expand(PRINCE_SCRATCH_LAB+'/genomes/Vitis_vinifera/Cantu/CabSauv08_v1.1/Sequence/WholeGenomeFasta/{genome}.fasta.fai',
+                  genome=['VITVvi_vCabSauv08_v1.1','VITVvi_vCabSauv08_v1.1.primary'])
+
+rule get_chrom_sizes:
+	input: "{genome}.fa.fai"
+	output: "{genome}.chrom.sizes"
+	shell:"""
+        cut -f1,2 {input} > {output}
+        """
+rule get_chrom_sizes2:
+	input: "{genome}.fasta.fai"
+	output: "{genome}.chrom.sizes"
+	shell:"""
+        cut -f1,2 {input} > {output}
+        """
+rule get_chrom_sizes_out:
+    input: expand(PRINCE_SCRATCH_LAB+"/{genome_dir}/{g}.chrom.sizes",\
+               g=['genome'],\
+               genome_dir=['genomes/Vitis_vinifera/URGI/PN40024_40X/Sequence/WholeGenomeFasta'])

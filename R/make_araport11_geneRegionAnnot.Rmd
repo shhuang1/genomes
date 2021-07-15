@@ -1,3 +1,13 @@
+---
+title: "Make Araport 11 gene region annotations"
+author: "shhuang"
+date: "1/15/2021"
+output:
+  html_document: default
+  pdf_document: default
+editor_options: 
+  chunk_output_type: console
+---
 
 ```{r load_libs}                                        # create Araport11 gene annotation files
 library(biomaRt)
@@ -9,6 +19,7 @@ library(systemPipeR)
 ```{r set_file_paths}
 ARAPORT11_GENES_DIR = "/scratch/cgsb/huang/genomes/Arabidopsis_thaliana/TAIR/Araport11/Annotation/Archives/archive-2016-06/Genes"
 ENS49_GENES_DIR = '/scratch/cgsb/huang/genomes/Arabidopsis_thaliana/Ensembl/TAIR10/Annotation/Archives/archive-2020-09-06-11-02/Genes'
+step_list = ""
 ```
 
 ## Make annotation files from Araport GFF
@@ -32,7 +43,9 @@ seqlevels(txdb)
 tx = transcripts(txdb, columns=c("tx_name", "gene_id", "tx_type"))
 print(table(mcols(tx)$tx_type))
 
-saveDb(txdb,file.path(ARAPORT11_GENES_DIR,paste0('TxDb.Athaliana.TAIR.Araport11')))
+if ("save_txdb_araport11" %in% step_list) {
+    saveDb(txdb,file.path(ARAPORT11_GENES_DIR,paste0('TxDb.Athaliana.TAIR.Araport11')))
+}
 
 ```
 
@@ -54,7 +67,10 @@ for (gene_type in gene_type_count[,gene_model_type]) {
     tx_type = transcripts(txdb_type,columns=c('tx_name','gene_id','tx_type'))
     print(table(mcols(tx_type)$tx_type))
     
+    if ("save_txdb_araport11" %in% step_list) {
+    
     saveDb(txdb_type,file.path(ARAPORT11_GENES_DIR,paste0('TxDb.Athaliana.TAIR.Araport11_',gene_type)))
+    }
 }
 
 ```
@@ -67,12 +83,15 @@ feat_list = genFeatures(txdb_clean, featuretype="all", reduce_ranges=TRUE,
 
 names(feat_list)[names(feat_list)=='promoter_red'] = 'tss_u1000d0_red'
 
+if ("save_bed_araport11" %in% step_list) {
+
 for (feat_name in names(feat_list)) {
     print(feat_name)
     feat_gr = feat_list[[feat_name]]
     
-    export.bed(feat_gr,file.path(GENES_DIR,paste0('all.',feat_name,'.bed')))
 
+    export.bed(feat_gr,file.path(GENES_DIR,paste0('all.',feat_name,'.bed')))
+    
     for (gene_type in gene_type_count[,gene_model_type]) {
         print(gene_type)
 
@@ -81,6 +100,7 @@ for (feat_name in names(feat_list)) {
             export.bed(feat_gr_sub, file.path(GENES_DIR,paste0(gene_type,'.',feat_name,'.bed')))
         }
     }
+}
 }
 ```
 
@@ -109,7 +129,9 @@ txdb_bm = makeTxDbFromBiomart(biomart="plants_mart",
 tx_bm = transcripts(txdb_bm, columns=c("tx_name", "gene_id", "tx_type"))
 print(table(mcols(tx_bm)$tx_type))
 
-saveDb(txdb_bm,file.path(ENS49_GENES_DIR,'TxDb.Athaliana.BioMart.plantsmart49'))
+if ("save_txdb_bm" %in% step_list) {
+    saveDb(txdb_bm,file.path(ENS49_GENES_DIR,'TxDb.Athaliana.BioMart.plantsmart49'))
+}
 
 txdb_ensgff = makeTxDbFromGFF(file=file.path(ENS49_GENES_DIR,'/Arabidopsis_thaliana.TAIR10.49.gff3'),
                         format='gff3',organism='Arabidopsis')
@@ -120,6 +142,8 @@ print(table(mcols(tx_ensgff)$tx_type))
 
 tx_biotype_use = c('protein_coding','lncRNA')
 
+if ("save_txdb_bm" %in% step_list) {
+
 for (bt in tx_biotype_use) {
      
     txdb_biotype = makeTxDbFromBiomart(biomart="plants_mart",
@@ -129,8 +153,9 @@ for (bt in tx_biotype_use) {
                                        host="plants.ensembl.org")
     tx_biotype = transcripts(txdb_biotype, columns=c("tx_name", "gene_id", "tx_type"))
     print(table(mcols(tx_biotype)$tx_type))
-
+    
     saveDb(txdb_biotype,file.path(ENS49_GENES_DIR,paste0('TxDb.Athaliana.BioMart.plantsmart49_',bt)))
+}
 }
 ```
 
@@ -158,3 +183,4 @@ These two are pseudogenes
 ```{r pseudogene}
 setdiff(mcols(ens49tx)$tx_name,mcols(a11tx)$tx_name)
 ```
+
