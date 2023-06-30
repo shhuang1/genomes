@@ -1,0 +1,34 @@
+---
+title: "Make Zea mays annotation files"
+author: "shhuang"
+date: "01/08/2023"
+output:
+  html_document: default
+  pdf_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r load_libs}
+library(annotatr)
+library(GenomicFeatures)
+library(rtracklayer)
+```
+
+```{r set_file_paths}
+Zmays_Zm0001eb_GENES_DIR = '/scratch/cgsb/huang/genomes/Zea_mays/NAM/Zm-B73-REFERENCE-NAM-5.0/Annotation/Archives/archive-Zm00001eb.1'
+step_list = ""
+```
+
+## Make annotation files from Phytozome GFF
+```{r load_gff}
+txdb = makeTxDbFromGFF(file=file.path(Zmays_Zm0001eb_GENES_DIR,"Zm-B73-REFERENCE-NAM-5.0_Zm00001eb.1.gff3"),
+                       organism='Zea mays',
+                       format="gff3")
+
+if ("save_txdb_Zm00001eb" %in% step_list) {
+    
+    saveDb(txdb,file.path(Zmays_Zm0001eb_GENES_DIR,paste0('TxDb.Zmays.NAM.Zm00001eb.1')))
+
+}
+```
