@@ -1,0 +1,82 @@
+---
+title: "Make Arabidopsis thaliana annotation files"
+author: "shhuang"
+date: "12/28/2021"
+output:
+  html_document: default
+  pdf_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r load_libs}
+library(annotatr)
+library(GenomicFeatures)
+library(rtracklayer)
+library(systemPipeR)
+```
+
+```{r set_file_paths}
+ARAPORT11_GENES_DIR = "/scratch/cgsb/huang/genomes/Arabidopsis_thaliana/TAIR/Araport11/Annotation/Archives/archive-2016-06/Genes"
+ENS49_GENES_DIR = '/scratch/cgsb/huang/genomes/Arabidopsis_thaliana/Ensembl/TAIR10/Annotation/Archives/archive-2020-09-06-11-02/Genes'
+step_list = ""
+```
+
+# Load Ensembl GFF
+
+```{r load_ens_gff}
+gr_ensgff = import(file.path(ENS49_GENES_DIR,'Arabidopsis_thaliana.TAIR10.49.gff3'))
+gr_ensgtf = import(file.path(ENS49_GENES_DIR,'Arabidopsis_thaliana.TAIR10.49.gtf'))
+
+print(table(mcols(gr_ensgtf)[,'gene_biotype']))
+```
+
+# Create annotation features and write to BED
+```{r write_bed_ens49gff}
+biotype_params = list('protein_coding'=list(name='protein_coding',featuretype='all',
+                                         upstream=1000,downstream=0,
+                                         reduce_ranges=TRUE,
+                                         promoter_lab='tss_u1000d0_red'),
+                      'lncRNA'=list(name='lncRNA',featuretype=c('tx_type','exon','promoter'),
+                                 upstream=1000,downstream=0,
+                                 reduce_ranges=TRUE,
+                                 promoter_lab='tss_u1000d0_red'),
+                      'miRNA'=list(name='miRNA',featuretype=c('tx_type','exon','promoter'),
+                                 upstream=1000,downstream=0,
+                                 reduce_ranges=TRUE,
+                                promoter_lab='tss_u1000d0_red'),
+                      'tRNA'=list(name='tRNA',featuretype=c('tx_type','exon','promoter'),
+                                 upstream=1000,downstream=0,
+                                 reduce_ranges=TRUE,
+                                promoter_lab='tss_u1000d0_red')
+                      )
+
+biotype_feat_list = lapply(biotype_params,function(bt) {    
+    gr_bt = gr_ensgtf[mcols(gr_ensgtf)$gene_biotype==bt[['name']]]
+    txdb_bt = makeTxDbFromGRanges(gr_bt)
+    print(bt)
+    feat_list = genFeatures(txdb_bt,featuretype=bt[['featuretype']], reduce_ranges=bt[['reduce_ranges']],
+                            upstream=bt[['upstream']],downstream=bt[['downstream']],
+                            verbose=TRUE)
+    names(feat_list)[names(feat_list)=='promoter_red'] = bt[['promoter_lab']]
+    return(feat_list)
+})
+
+if ("write_bed_ens49gtf" %in% step_list) {
+
+	for (bt in names(biotype_feat_list)) {
+        feat_list = biotype_feat_list[[bt]]
+        for (feat_name in names(feat_list)) {
+            print(feat_name)
+
+            feat_gr = feat_list[[feat_name]]
+            bt_feat_name = paste0(bt,'.',feat_name)
+            mcols(feat_gr)$name = bt_feat_name
+            export.bed(feat_gr,file.path(ENS49_GENES_DIR,paste0(bt_feat_name,'.bed')))
+        }
+    }
+
+}
+    
+
+```
