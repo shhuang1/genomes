@@ -1,0 +1,42 @@
+---
+title: "Make Populus trichocarpa annotation files"
+author: "shhuang"
+date: "10/28/2022"
+output:
+  html_document: default
+  pdf_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r load_libs}
+library(annotatr)
+library(GenomicFeatures)
+library(rtracklayer)
+```
+
+```{r set_file_paths}
+Ptrichocarpa_444_GENES_DIR = "/scratch/cgsb/huang/genomes/Populus_trichocarpa/Phytozome/Ptrichocarpa_v3.1/Annotation/Archives/archive-444_v3.1/Genes"
+step_list = ""
+```
+
+## Make annotation files from Phytozome GFF
+```{r load_gff}
+txdb = makeTxDbFromGFF(file=file.path(Ptrichocarpa_444_GENES_DIR,"Ptrichocarpa_444_v3.1.gene.gff3.gz"),
+                       format="gff3", taxonomyId=3694)
+
+```
+
+## Promoters
+```{r promoters}
+prom_dist_list = list(c(1000,0),c(2000,0),c(1000,1000))
+
+for (prom_dist in prom_dist_list) {
+    prom_gr = promoters(txdb, upstream=prom_dist[1], downstream=prom_dist[2])
+
+    rtracklayer::export(prom_gr,con=file.path(Ptrichocarpa_444_GENES_DIR,
+                                               sprintf("Ptrichocarpa_444_v3.1.gene_up%04ddn%04d.bed",prom_dist[1],prom_dist[2])),
+                        format='bed')
+    }
+    
+```
